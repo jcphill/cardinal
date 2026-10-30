@@ -1,0 +1,80 @@
+name: Build Docker image
+
+on:
+  push:
+    branches:
+      - ci-test
+
+# Cancel an in-flight build for this branch as soon as a newer commit lands,
+# rather than letting builds queue up behind each other -- a full Cardinal
+# build is expensive, and only the latest commit's image is ever worth
+# finishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Cardinal
+        uses: actions/checkout@v4
+
+      # Deliberately not actions/checkout's submodules: option -- .gitmodules
+      # also declares several private, INL-internal submodules (SAM,
+      # sockeye, sodium, potassium, iapws95, bison) this runner has no
+      # credentials for. get-dependencies.sh already knows the exact set of
+      # public submodules Cardinal needs; reuse it instead of duplicating
+      # that list here.
+      - name: Fetch public submodules
+        run: ./scripts/get-dependencies.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # idaholab/moose-dev publishes "latest" alongside a dated tag
+      # (e.g. 2026.10.19) pointing at the exact same digest, pushed
+      # together -- look up that date tag via Docker Hub's API (no image
+      # pull needed) and bake it into our own image tag below, so "which
+      # moose-dev went into this build" is readable at a glance, without
+      # needing provenance tooling.
+      - name: Resolve moose-dev date tag
+        id: moosedev
+        run: |
+          tags_json=$(curl -sf "https://hub.docker.com/v2/repositories/idaholab/moose-dev/tags?page_size=20&ordering=last_updated")
+          latest_digest=$(echo "$tags_json" | jq -r '.results[] | select(.name=="latest") | .digest')
+          date_tag=$(echo "$tags_json" | jq -r --arg d "$latest_digest" \
+            '[.results[] | select(.name != "latest" and .digest == $d)][0].name')
+          echo "tag=$date_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # The action's own "pull" input defaults to false, so without
+          # this it's not guaranteed to notice when idaholab/moose-dev's
+          # floating "latest" tag moves -- especially once the GHA cache
+          # below has a cached layer for that FROM step. Force a fresh
+          # pull every run, matching `docker build --pull`.
+          pull: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/cardinal:ci-test
+            ghcr.io/${{ github.repository_owner }}/cardinal:ci-test-${{ github.sha }}-moosedev-${{ steps.moosedev.outputs.tag }}
+          # Persists BuildKit's layer cache in the GitHub Actions cache
+          # service -- without this, every run starts on a brand-new VM
+          # with nothing cached at all, and Docker's own layer cache (which
+          # only lives on one machine) provides zero benefit across runs.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
