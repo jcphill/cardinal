@@ -1,5 +1,3 @@
-# COPY, not a baked-in git clone: Docker caches a RUN step by its command
-# text, not what it fetches, so a clone would never see new commits.
 FROM idaholab/moose-dev:latest
 
 ENV HDF5_ROOT=/opt/petsc
