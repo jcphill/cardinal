@@ -56,11 +56,15 @@ RUN rm -f contrib/moose/framework/include/base/MooseConfig.h \
            contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER
 
 # COPY preserves checkout-time mtimes, which across separate CI runs
-# are always newer than yesterday's cached build output -- Make (and
-# nested CMake sub-builds like NekRS's bundled ADIOS2) would otherwise
-# reconfigure and rebuild from scratch here. Touching everything avoids
-# chasing each nested sub-build's own staleness comparison individually.
+# are always newer than yesterday's cached build output -- Make would
+# otherwise reconfigure and rebuild from scratch here. Backdating the
+# source tree (rather than touching build/install to "now") matters:
+# ExternalProject_Add targets like HYPRE rely on their own stamp files
+# being internally consistent with each other, and bumping everything
+# under build/ to ~the same timestamp in filesystem-traversal order
+# scrambles that ordering, forcing a full rebuild anyway.
 COPY . .
-RUN find . -exec touch {} +
+RUN find . \( -path ./build -o -path ./install \) -prune -o \
+    -exec touch -t 202001010000 {} +
 
 RUN make -j$(nproc)
