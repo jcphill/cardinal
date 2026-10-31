@@ -19,7 +19,6 @@ COPY config/check_deps.mk config/check_deps.mk
 COPY config/check_modules.mk config/check_modules.mk
 COPY config/check_nekrs.mk config/check_nekrs.mk
 COPY config/add_flags.mk config/add_flags.mk
-COPY config/nekrs.mk config/nekrs.mk
 COPY contrib/moose/framework/build.mk contrib/moose/framework/build.mk
 COPY contrib/moose/framework/moose.mk contrib/moose/framework/moose.mk
 COPY contrib/moose/framework/app.mk contrib/moose/framework/app.mk
@@ -29,6 +28,7 @@ COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
 # NekRS changes less often than OpenMC, so build it first. openmc.mk,
 # contrib/openmc, and the HIT parser are only existence-checked here,
 # not needed for real until later.
+COPY config/nekrs.mk config/nekrs.mk
 COPY contrib/nekRS contrib/nekRS
 RUN mkdir -p contrib/openmc contrib/moose/framework/contrib/hit && \
     touch contrib/openmc/DOCKERFILE_PLACEHOLDER \
