@@ -40,20 +40,31 @@ COPY contrib/moose/framework/contrib/neml2.mk contrib/moose/framework/contrib/ne
 COPY contrib/moose/framework/contrib/hit contrib/moose/framework/contrib/hit
 COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
 
-# NekRS in its own layer, built *before* OpenMC's submodules even exist
+# NekRS in its own layer, built *before* OpenMC's real submodules exist
 # in the image -- NekRS changes less often than OpenMC, so this way an
 # OpenMC-only commit never invalidates NekRS's (already expensive)
-# build. ENABLE_OPENMC=no only for this one invocation: without it,
-# check_deps.mk's OpenMC-availability check would hard-error here even
-# though we're only asking for build_nekrs, since contrib/openmc and
-# contrib/nuclear_data aren't copied in yet.
+# build. ENABLE_OPENMC defaults to yes, so check_deps.mk's OpenMC/
+# nuclear_data availability checks would otherwise hard-error here even
+# though we're only asking for build_nekrs. Rather than override
+# ENABLE_OPENMC=no for just this one invocation -- a divergent flag
+# path from the real build, which could silently start mattering to
+# NekRS's own build if a future Cardinal change ever makes it care about
+# ENABLE_OPENMC -- satisfy those checks with placeholder files we create
+# and own ourselves, deleted before the real submodules are copied in
+# below. Both checks are a plain, non-dotfile-sensitive `ls` test
+# (confirmed via a real `make -n` dry run -- a leading-dot filename is
+# invisible to it), so any non-empty, non-dotfile placeholder works.
 COPY contrib/nekRS contrib/nekRS
-RUN make ENABLE_OPENMC=no build_nekrs
+RUN mkdir -p contrib/openmc contrib/nuclear_data && \
+    touch contrib/openmc/DOCKERFILE_PLACEHOLDER contrib/nuclear_data/DOCKERFILE_PLACEHOLDER && \
+    make build_nekrs
 
-# OpenMC in its own layer. nuclear_data is required here too --
+# OpenMC in its own layer. Remove the placeholders above before copying
+# in the real submodules -- nuclear_data is required here too,
 # check_deps.mk hard-errors without it whenever ENABLE_OPENMC=yes (the
-# default, so no override needed this time; NekRS is already copied in
-# from the layer above, so its own availability check still passes).
+# default); NekRS is already copied in from the layer above, so its own
+# availability check still passes.
+RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER contrib/nuclear_data/DOCKERFILE_PLACEHOLDER
 COPY contrib/openmc contrib/openmc
 COPY contrib/nuclear_data contrib/nuclear_data
 RUN make build_openmc
