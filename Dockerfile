@@ -15,9 +15,16 @@ COPY contrib/nuclear_data contrib/nuclear_data
 # Only the MOOSE files needed to parse the Makefile (compiler paths for
 # nekrs.mk/openmc.mk, mandatory includes, and the HIT-parser check) --
 # not MOOSE's much larger, much more frequently changing source tree.
+# Likewise only the config/*.mk files actually included under the
+# default flags (ENABLE_NEK/OPENMC=yes, ENABLE_DAGMC=no); scripts/ isn't
+# referenced by the build at all, only by error-message text.
 COPY Makefile ./
-COPY config config
-COPY scripts scripts
+COPY config/check_deps.mk config/check_deps.mk
+COPY config/check_modules.mk config/check_modules.mk
+COPY config/check_nekrs.mk config/check_nekrs.mk
+COPY config/add_flags.mk config/add_flags.mk
+COPY config/nekrs.mk config/nekrs.mk
+COPY config/openmc.mk config/openmc.mk
 COPY contrib/moose/framework/build.mk contrib/moose/framework/build.mk
 COPY contrib/moose/framework/moose.mk contrib/moose/framework/moose.mk
 COPY contrib/moose/framework/app.mk contrib/moose/framework/app.mk
