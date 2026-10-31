@@ -44,8 +44,7 @@ RUN mkdir -p contrib/openmc contrib/moose/framework/contrib/hit \
     make build_nekrs || \
       (cat build/nekrs/HYPRE_BUILD-prefix/src/HYPRE_BUILD/src/config.log; exit 1)
 
-RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER \
-           contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER
+RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER
 COPY config/openmc.mk config/openmc.mk
 COPY contrib/openmc contrib/openmc
 RUN make build_openmc
@@ -53,7 +52,8 @@ RUN make build_openmc
 # Remove the MooseConfig.h placeholder so the real build regenerates it
 # -- otherwise its build-time mtime (newer than anything COPY'd from
 # the checkout) could fool Make into thinking it's already up to date.
-RUN rm -f contrib/moose/framework/include/base/MooseConfig.h
+RUN rm -f contrib/moose/framework/include/base/MooseConfig.h \
+           contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER
 
 # NekRS/OpenMC are already built; re-running their order-only
 # prerequisites here is cheap.
