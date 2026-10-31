@@ -17,16 +17,28 @@ ENV NEKRS_HOME=/cardinal/install
 
 WORKDIR /cardinal
 
-# Cardinal's own build orchestration (Makefile/config/scripts) plus
-# MOOSE: needed just to parse the Makefile at all, regardless of which
-# target is requested -- config/check_deps.mk hard-errors on a missing
-# MOOSE unconditionally, and build.mk/moose.mk (both under
-# contrib/moose) are what resolve the compiler paths config/nekrs.mk
-# and config/openmc.mk pass to cmake.
+# Cardinal's own build orchestration (Makefile/config/scripts) plus the
+# specific MOOSE files needed just to *parse* the Makefile, regardless
+# of which target is requested -- verified directly with a `make -n`
+# dry run against a partial checkout, not just by reading the Makefiles:
+# build.mk/moose.mk/app.mk resolve the compiler paths config/nekrs.mk
+# and config/openmc.mk pass to cmake, modules/modules.mk is included
+# unconditionally, moose.mk itself mandatorily includes contrib/neml2.mk,
+# and moose.mk separately hard-errors unless framework/contrib/hit (the
+# HIT input-file parser) is non-empty -- that whole tiny (~1MB)
+# directory is copied rather than picking one file out of it, since
+# nothing here actually needs to *build* it, just see that it exists.
+# The rest of MOOSE's famously large tree (framework/src, modules/*,
+# everything else) isn't needed at all until the final build below.
 COPY Makefile ./
 COPY config config
 COPY scripts scripts
-COPY contrib/moose contrib/moose
+COPY contrib/moose/framework/build.mk contrib/moose/framework/build.mk
+COPY contrib/moose/framework/moose.mk contrib/moose/framework/moose.mk
+COPY contrib/moose/framework/app.mk contrib/moose/framework/app.mk
+COPY contrib/moose/framework/contrib/neml2.mk contrib/moose/framework/contrib/neml2.mk
+COPY contrib/moose/framework/contrib/hit contrib/moose/framework/contrib/hit
+COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
 
 # NekRS in its own layer, built *before* OpenMC's submodules even exist
 # in the image -- NekRS changes less often than OpenMC, so this way an
