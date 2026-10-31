@@ -55,8 +55,10 @@ RUN make build_openmc
 RUN rm -f contrib/moose/framework/include/base/MooseConfig.h \
            contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER
 
-# NekRS/OpenMC are already built; re-running their order-only
-# prerequisites here is cheap.
+# COPY preserves checkout-time mtimes, which across separate CI runs
+# are always newer than yesterday's cached build output -- Make would
+# otherwise reconfigure and rebuild NekRS/OpenMC from scratch here.
 COPY . .
+RUN find build/nekrs build/openmc install -exec touch {} +
 
 RUN make -j$(nproc)
