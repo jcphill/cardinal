@@ -56,9 +56,11 @@ RUN rm -f contrib/moose/framework/include/base/MooseConfig.h \
            contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER
 
 # COPY preserves checkout-time mtimes, which across separate CI runs
-# are always newer than yesterday's cached build output -- Make would
-# otherwise reconfigure and rebuild NekRS/OpenMC from scratch here.
+# are always newer than yesterday's cached build output -- Make (and
+# nested CMake sub-builds like NekRS's bundled ADIOS2) would otherwise
+# reconfigure and rebuild from scratch here. Touching everything avoids
+# chasing each nested sub-build's own staleness comparison individually.
 COPY . .
-RUN find build/nekrs build/openmc install -exec touch {} +
+RUN find . -exec touch {} +
 
 RUN make -j$(nproc)
