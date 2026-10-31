@@ -30,9 +30,16 @@ COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
 # not needed for real until later.
 COPY config/nekrs.mk config/nekrs.mk
 COPY contrib/nekRS contrib/nekRS
-RUN mkdir -p contrib/openmc contrib/moose/framework/contrib/hit && \
+# Cardinal's own CFLAGS/LDFLAGS (incl. "-include .../MooseConfig.h")
+# leak into third-party sub-builds like HYPRE's; MooseConfig.h is
+# normally generated as a side effect of building $(app_EXEC), which
+# this layer never asks for. A placeholder satisfies the compile check;
+# removed before the final build so it regenerates for real.
+RUN mkdir -p contrib/openmc contrib/moose/framework/contrib/hit \
+             contrib/moose/framework/include/base && \
     touch contrib/openmc/DOCKERFILE_PLACEHOLDER \
           contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER \
+          contrib/moose/framework/include/base/MooseConfig.h \
           config/openmc.mk && \
     make build_nekrs || \
       (cat build/nekrs/HYPRE_BUILD-prefix/src/HYPRE_BUILD/src/config.log; exit 1)
@@ -42,6 +49,11 @@ RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER \
 COPY config/openmc.mk config/openmc.mk
 COPY contrib/openmc contrib/openmc
 RUN make build_openmc
+
+# Remove the MooseConfig.h placeholder so the real build regenerates it
+# -- otherwise its build-time mtime (newer than anything COPY'd from
+# the checkout) could fool Make into thinking it's already up to date.
+RUN rm -f contrib/moose/framework/include/base/MooseConfig.h
 
 # NekRS/OpenMC are already built; re-running their order-only
 # prerequisites here is cheap.
