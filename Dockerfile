@@ -17,30 +17,38 @@ ENV NEKRS_HOME=/cardinal/install
 
 WORKDIR /cardinal
 
-# Build the heavy, infrequently-changing native dependencies (NekRS,
-# OpenMC) in their own layer, from just Cardinal's build orchestration
-# (Makefile/config/scripts) plus the public submodules they actually
-# need -- config/{nekrs,openmc}.mk's build_nekrs/build_openmc targets
-# only depend on these (confirmed directly: config/check_deps.mk's
-# existence checks never touch src/, include/, or test/), not on
-# anything that changes on every commit. nuclear_data is required too
-# -- check_deps.mk hard-errors without it whenever ENABLE_OPENMC=yes.
-# As long as none of these inputs change, this whole layer -- and the
-# NekRS/OpenMC build it runs -- is skipped entirely by Docker's cache,
-# even when Cardinal's own source below does.
+# Cardinal's own build orchestration (Makefile/config/scripts) plus
+# MOOSE: needed just to parse the Makefile at all, regardless of which
+# target is requested -- config/check_deps.mk hard-errors on a missing
+# MOOSE unconditionally, and build.mk/moose.mk (both under
+# contrib/moose) are what resolve the compiler paths config/nekrs.mk
+# and config/openmc.mk pass to cmake.
 COPY Makefile ./
 COPY config config
 COPY scripts scripts
 COPY contrib/moose contrib/moose
+
+# NekRS in its own layer, built *before* OpenMC's submodules even exist
+# in the image -- NekRS changes less often than OpenMC, so this way an
+# OpenMC-only commit never invalidates NekRS's (already expensive)
+# build. ENABLE_OPENMC=no only for this one invocation: without it,
+# check_deps.mk's OpenMC-availability check would hard-error here even
+# though we're only asking for build_nekrs, since contrib/openmc and
+# contrib/nuclear_data aren't copied in yet.
 COPY contrib/nekRS contrib/nekRS
+RUN make ENABLE_OPENMC=no build_nekrs
+
+# OpenMC in its own layer. nuclear_data is required here too --
+# check_deps.mk hard-errors without it whenever ENABLE_OPENMC=yes (the
+# default, so no override needed this time; NekRS is already copied in
+# from the layer above, so its own availability check still passes).
 COPY contrib/openmc contrib/openmc
 COPY contrib/nuclear_data contrib/nuclear_data
-
-RUN make build_nekrs build_openmc
+RUN make build_openmc
 
 # Now bring in the rest of Cardinal's own source (changes on every
 # commit) and do the real build. NekRS/OpenMC are already built and
-# installed from the layer above; re-running `make`'s own
+# installed from the layers above; re-running `make`'s own
 # build_nekrs/build_openmc order-only prerequisites here is cheap --
 # they just re-check the already-built, nested CMake build trees for
 # "nothing to do" rather than rebuilding them.
