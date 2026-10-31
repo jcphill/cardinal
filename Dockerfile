@@ -40,33 +40,34 @@ COPY contrib/moose/framework/contrib/neml2.mk contrib/moose/framework/contrib/ne
 COPY contrib/moose/framework/contrib/hit contrib/moose/framework/contrib/hit
 COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
 
-# NekRS in its own layer, built *before* OpenMC's real submodules exist
+# nuclear_data for real, not a placeholder -- it's tiny (~49KB) and
+# changes about as rarely as anything in this Dockerfile, so there's no
+# benefit to deferring it the way OpenMC's actual (large, slow-to-build)
+# submodule is deferred below.
+COPY contrib/nuclear_data contrib/nuclear_data
+
+# NekRS in its own layer, built *before* OpenMC's real submodule exists
 # in the image -- NekRS changes less often than OpenMC, so this way an
 # OpenMC-only commit never invalidates NekRS's (already expensive)
-# build. ENABLE_OPENMC defaults to yes, so check_deps.mk's OpenMC/
-# nuclear_data availability checks would otherwise hard-error here even
-# though we're only asking for build_nekrs. Rather than override
-# ENABLE_OPENMC=no for just this one invocation -- a divergent flag
-# path from the real build, which could silently start mattering to
-# NekRS's own build if a future Cardinal change ever makes it care about
-# ENABLE_OPENMC -- satisfy those checks with placeholder files we create
-# and own ourselves, deleted before the real submodules are copied in
-# below. Both checks are a plain, non-dotfile-sensitive `ls` test
-# (confirmed via a real `make -n` dry run -- a leading-dot filename is
-# invisible to it), so any non-empty, non-dotfile placeholder works.
+# build. ENABLE_OPENMC defaults to yes, so check_deps.mk's OpenMC-
+# availability check would otherwise hard-error here even though we're
+# only asking for build_nekrs. Rather than override ENABLE_OPENMC=no
+# for just this one invocation -- a divergent flag path from the real
+# build, which could silently start mattering to NekRS's own build if a
+# future Cardinal change ever makes it care about ENABLE_OPENMC --
+# satisfy that check with a placeholder file we create and own
+# ourselves, deleted before the real submodule is copied in below. The
+# check is a plain, non-dotfile-sensitive `ls` test (confirmed via a
+# real `make -n` dry run -- a leading-dot filename is invisible to it),
+# so any non-empty, non-dotfile placeholder works.
 COPY contrib/nekRS contrib/nekRS
-RUN mkdir -p contrib/openmc contrib/nuclear_data && \
-    touch contrib/openmc/DOCKERFILE_PLACEHOLDER contrib/nuclear_data/DOCKERFILE_PLACEHOLDER && \
-    make build_nekrs
+RUN mkdir -p contrib/openmc && touch contrib/openmc/DOCKERFILE_PLACEHOLDER && make build_nekrs
 
-# OpenMC in its own layer. Remove the placeholders above before copying
-# in the real submodules -- nuclear_data is required here too,
-# check_deps.mk hard-errors without it whenever ENABLE_OPENMC=yes (the
-# default); NekRS is already copied in from the layer above, so its own
-# availability check still passes.
-RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER contrib/nuclear_data/DOCKERFILE_PLACEHOLDER
+# OpenMC in its own layer. Remove the placeholder above before copying
+# in the real submodule -- NekRS and nuclear_data are already present
+# from the layers above, so their own availability checks still pass.
+RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER
 COPY contrib/openmc contrib/openmc
-COPY contrib/nuclear_data contrib/nuclear_data
 RUN make build_openmc
 
 # Now bring in the rest of Cardinal's own source (changes on every
