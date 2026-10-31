@@ -17,6 +17,12 @@ ENV NEKRS_HOME=/cardinal/install
 
 WORKDIR /cardinal
 
+# nuclear_data for real, not a placeholder -- it's tiny (~49KB) and
+# changes about as rarely as anything in this Dockerfile, so there's no
+# benefit to deferring it the way OpenMC's actual (large, slow-to-build)
+# submodule is deferred below.
+COPY contrib/nuclear_data contrib/nuclear_data
+
 # Cardinal's own build orchestration (Makefile/config/scripts) plus the
 # specific MOOSE files needed just to *parse* the Makefile, regardless
 # of which target is requested -- verified directly with a `make -n`
@@ -29,7 +35,10 @@ WORKDIR /cardinal
 # directory is copied rather than picking one file out of it, since
 # nothing here actually needs to *build* it, just see that it exists.
 # The rest of MOOSE's famously large tree (framework/src, modules/*,
-# everything else) isn't needed at all until the final build below.
+# everything else) isn't needed at all until the final build below. This
+# (and nuclear_data above) don't need to come in any particular order
+# relative to each other -- COPY just populates the filesystem, and both
+# only need to be present by the time `make build_nekrs` runs below.
 COPY Makefile ./
 COPY config config
 COPY scripts scripts
@@ -39,12 +48,6 @@ COPY contrib/moose/framework/app.mk contrib/moose/framework/app.mk
 COPY contrib/moose/framework/contrib/neml2.mk contrib/moose/framework/contrib/neml2.mk
 COPY contrib/moose/framework/contrib/hit contrib/moose/framework/contrib/hit
 COPY contrib/moose/modules/modules.mk contrib/moose/modules/modules.mk
-
-# nuclear_data for real, not a placeholder -- it's tiny (~49KB) and
-# changes about as rarely as anything in this Dockerfile, so there's no
-# benefit to deferring it the way OpenMC's actual (large, slow-to-build)
-# submodule is deferred below.
-COPY contrib/nuclear_data contrib/nuclear_data
 
 # NekRS in its own layer, built *before* OpenMC's real submodule exists
 # in the image -- NekRS changes less often than OpenMC, so this way an
