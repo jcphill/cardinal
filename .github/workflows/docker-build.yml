@@ -5,10 +5,8 @@ on:
     branches:
       - ci-test
 
-# Cancel an in-flight build for this branch as soon as a newer commit lands,
-# rather than letting builds queue up behind each other -- a full Cardinal
-# build is expensive, and only the latest commit's image is ever worth
-# finishing.
+# Cancel an in-flight build when a newer commit lands, rather than
+# queuing redundant builds.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,12 +22,9 @@ jobs:
       - name: Check out Cardinal
         uses: actions/checkout@v7
 
-      # Deliberately not actions/checkout's submodules: option -- .gitmodules
-      # also declares several private, INL-internal submodules (SAM,
-      # sockeye, sodium, potassium, iapws95, bison) this runner has no
-      # credentials for. get-dependencies.sh already knows the exact set of
-      # public submodules Cardinal needs; reuse it instead of duplicating
-      # that list here.
+      # Not actions/checkout's submodules: option -- .gitmodules also
+      # declares private INL submodules this runner has no credentials
+      # for. get-dependencies.sh already knows the public-only subset.
       - name: Fetch public submodules
         run: ./scripts/get-dependencies.sh
 
@@ -42,12 +37,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # idaholab/moose-dev publishes "latest" alongside a dated tag
-      # (e.g. 2026.10.19) pointing at the exact same digest, pushed
-      # together -- look up that date tag via Docker Hub's API (no image
-      # pull needed) and bake it into our own image tag below, so "which
-      # moose-dev went into this build" is readable at a glance, without
-      # needing provenance tooling.
+      # idaholab/moose-dev tags "latest" with a matching date tag
+      # (e.g. 2026.10.19); look that up via Docker Hub's API so it can
+      # go in our own image tag below.
       - name: Resolve moose-dev date tag
         id: moosedev
         run: |
@@ -69,18 +61,11 @@ jobs:
         with:
           context: .
           push: true
-          # The action's own "pull" input defaults to false, so without
-          # this it's not guaranteed to notice when idaholab/moose-dev's
-          # floating "latest" tag moves -- especially once the GHA cache
-          # below has a cached layer for that FROM step. Force a fresh
-          # pull every run, matching `docker build --pull`.
+          # Defaults to false; forces a fresh check of moose-dev:latest.
           pull: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}-${{ steps.meta.outputs.date }}-${{ steps.meta.outputs.short_sha }}-moosedev-${{ steps.moosedev.outputs.tag }}
-          # Persists BuildKit's layer cache in the GitHub Actions cache
-          # service -- without this, every run starts on a brand-new VM
-          # with nothing cached at all, and Docker's own layer cache (which
-          # only lives on one machine) provides zero benefit across runs.
+          # Persists the layer cache across runs (each run is a fresh VM).
           cache-from: type=gha
           cache-to: type=gha,mode=max
