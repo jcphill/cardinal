@@ -76,8 +76,8 @@ jobs:
           # pull every run, matching `docker build --pull`.
           pull: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/cardinal:ci-test
-            ghcr.io/${{ github.repository_owner }}/cardinal:ci-test-${{ steps.meta.outputs.date }}-${{ steps.meta.outputs.short_sha }}-moosedev-${{ steps.moosedev.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}-${{ steps.meta.outputs.date }}-${{ steps.meta.outputs.short_sha }}-moosedev-${{ steps.moosedev.outputs.tag }}
           # Persists BuildKit's layer cache in the GitHub Actions cache
           # service -- without this, every run starts on a brand-new VM
           # with nothing cached at all, and Docker's own layer cache (which
