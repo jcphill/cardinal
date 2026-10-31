@@ -34,6 +34,7 @@ RUN mkdir -p contrib/openmc contrib/moose/framework/contrib/hit && \
     touch contrib/openmc/DOCKERFILE_PLACEHOLDER \
           contrib/moose/framework/contrib/hit/DOCKERFILE_PLACEHOLDER \
           config/openmc.mk && \
+    echo "PATH=$PATH" && which mpicc && mpicc --version && \
     make build_nekrs
 
 RUN rm -f contrib/openmc/DOCKERFILE_PLACEHOLDER \
