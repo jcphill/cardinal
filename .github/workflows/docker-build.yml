@@ -22,12 +22,6 @@ jobs:
       - name: Check out Cardinal
         uses: actions/checkout@v7
 
-      # Not actions/checkout's submodules: option -- .gitmodules also
-      # declares private INL submodules this runner has no credentials
-      # for. get-dependencies.sh already knows the public-only subset.
-      - name: Fetch public submodules
-        run: ./scripts/get-dependencies.sh
-
       - name: Set build metadata
         id: meta
         run: |
