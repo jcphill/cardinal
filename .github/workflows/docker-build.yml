@@ -31,17 +31,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # idaholab/moose-dev tags "latest" with a matching date tag
-      # (e.g. 2026.10.19); look that up via Docker Hub's API so it can
-      # go in our own image tag below.
-      - name: Resolve moose-dev date tag
+      # Ask contrib/moose itself (via its own scripts/versioner.py) which
+      # moose-dev tag this exact pinned commit was tested against, rather
+      # than guessing from whatever moose-dev:latest currently resolves to
+      # on Docker Hub. This is the same comparison MOOSE's own
+      # scripts/premake.py makes at build time, just computed up front so
+      # the Dockerfile's FROM can pull that exact tag directly.
+      - name: Resolve required moose-dev tag
         id: moosedev
         run: |
-          tags_json=$(curl -sf "https://hub.docker.com/v2/repositories/idaholab/moose-dev/tags?page_size=20&ordering=last_updated")
-          latest_digest=$(echo "$tags_json" | jq -r '.results[] | select(.name=="latest") | .digest')
-          date_tag=$(echo "$tags_json" | jq -r --arg d "$latest_digest" \
-            '[.results[] | select(.name != "latest" and .digest == $d)][0].name')
-          echo "tag=$date_tag" >> "$GITHUB_OUTPUT"
+          git submodule update --init --progress contrib/moose
+          pip install --quiet pyyaml jinja2
+          tag=$(python3 contrib/moose/scripts/versioner.py moose-dev HEAD --json | \
+            python3 -c "import json, sys; print(json.load(sys.stdin)['apptainer']['tag'])")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -55,8 +58,10 @@ jobs:
         with:
           context: .
           push: true
-          # Defaults to false; forces a fresh check of moose-dev:latest.
+          # Defaults to false; forces a fresh pull of the resolved moose-dev tag.
           pull: true
+          build-args: |
+            MOOSEDEV_TAG=${{ steps.moosedev.outputs.tag }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/cardinal:${{ github.ref_name }}-${{ steps.meta.outputs.date }}-${{ steps.meta.outputs.short_sha }}-moosedev-${{ steps.moosedev.outputs.tag }}

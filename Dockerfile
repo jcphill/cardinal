@@ -1,10 +1,21 @@
+# Resolving MOOSEDEV_TAG to an exact moose-dev tag (rather than defaulting
+# to "latest") makes the FROM lines below pull the exact image contrib/moose
+# was tested against instead of hoping "latest" still matches -- see the
+# version-match RUN step below for how that exact tag gets determined and
+# enforced. Plain `docker build .` has no way to know it up front (that
+# requires contrib/moose to already be checked out, which is the very thing
+# this stage exists to avoid needing beforehand), so it defaults to "latest"
+# and relies on that RUN step to fail with the exact value to pass instead.
+ARG MOOSEDEV_TAG=latest
+
 # A plain git clone leaves public submodules uninitialized; fetch them
 # here so users don't have to run scripts/get-dependencies.sh first.
 # This stage's RUN always re-executes (its cache key is keyed off .git,
 # which changes on every commit), but downstream COPY --from steps are
 # content-addressed, so the per-dependency cache granularity below is
 # unaffected by that.
-FROM idaholab/moose-dev:latest AS submodules
+FROM idaholab/moose-dev:${MOOSEDEV_TAG} AS submodules
+ARG MOOSEDEV_TAG
 WORKDIR /cardinal
 COPY .git .git
 COPY .gitmodules .gitmodules
@@ -13,7 +24,25 @@ RUN git submodule update --init --progress contrib/moose && \
     git submodule update --init --progress contrib/openmc && \
     git submodule update --init --progress contrib/nuclear_data
 
-FROM idaholab/moose-dev:latest
+# MOOSE's own version check (scripts/premake.py, run from moose.mk's
+# prebuild target) only compares against MOOSE_APPTAINER_GENERATOR_* or
+# CONDA_PREFIX environment variables, neither of which a plain Docker
+# container sets, so it silently checks nothing here -- and even where it
+# does run, it only ever warns. Enforce a real version match ourselves,
+# using MOOSE's own scripts/versioner.py (the authoritative source --
+# the same thing premake.py itself compares against) to find out what
+# moose-dev tag this exact MOOSE commit was tested against, and failing
+# the build with the exact tag to pass if MOOSEDEV_TAG doesn't match it.
+RUN cd contrib/moose && \
+    required=$(python3 scripts/versioner.py moose-dev HEAD --json | \
+      python3 -c "import json, sys; print(json.load(sys.stdin)['apptainer']['tag'])") && \
+    if [ "$required" != "$MOOSEDEV_TAG" ]; then \
+      echo "contrib/moose (HEAD) was tested against moose-dev:$required, not moose-dev:$MOOSEDEV_TAG." >&2; \
+      echo "Rebuild with: docker build --build-arg MOOSEDEV_TAG=$required ." >&2; \
+      exit 1; \
+    fi
+
+FROM idaholab/moose-dev:${MOOSEDEV_TAG}
 
 ENV HDF5_ROOT=/opt/petsc
 ENV BASH_ENV=/environment
