@@ -1,11 +1,5 @@
-# Resolving MOOSEDEV_TAG to an exact moose-dev tag (rather than defaulting
-# to "latest") makes the FROM lines below pull the exact image contrib/moose
-# was tested against instead of hoping "latest" still matches -- see the
-# version-match RUN step below for how that exact tag gets determined and
-# enforced. Plain `docker build .` has no way to know it up front (that
-# requires contrib/moose to already be checked out, which is the very thing
-# this stage exists to avoid needing beforehand), so it defaults to "latest"
-# and relies on that RUN step to fail with the exact value to pass instead.
+# Defaults to "latest" since contrib/moose isn't fetched yet to know the
+# exact tag it needs; see the version-match RUN step below.
 ARG MOOSEDEV_TAG=latest
 
 # A plain git clone leaves public submodules uninitialized; fetch them
@@ -19,28 +13,33 @@ ARG MOOSEDEV_TAG
 WORKDIR /cardinal
 COPY .git .git
 COPY .gitmodules .gitmodules
-RUN git submodule update --init --progress contrib/moose && \
-    git submodule update --init --progress contrib/nekRS && \
-    git submodule update --init --progress contrib/openmc && \
-    git submodule update --init --progress contrib/nuclear_data
 
-# MOOSE's own version check (scripts/premake.py, run from moose.mk's
-# prebuild target) only compares against MOOSE_APPTAINER_GENERATOR_* or
-# CONDA_PREFIX environment variables, neither of which a plain Docker
-# container sets, so it silently checks nothing here -- and even where it
-# does run, it only ever warns. Enforce a real version match ourselves,
-# using MOOSE's own scripts/versioner.py (the authoritative source --
-# the same thing premake.py itself compares against) to find out what
-# moose-dev tag this exact MOOSE commit was tested against, and failing
-# the build with the exact tag to pass if MOOSEDEV_TAG doesn't match it.
-RUN cd contrib/moose && \
+# Fetched and checked on its own, before the other (larger) submodules,
+# so a version mismatch fails fast without spending time/bandwidth on
+# them first.
+RUN git submodule update --init --progress contrib/moose
+
+# MOOSE's own version check (scripts/premake.py) only fires under a login
+# shell or conda, neither of which a plain RUN gets, and even then only
+# warns. Enforce a real match ourselves: ask scripts/versioner.py (the
+# source premake.py itself uses) what moose-dev tag this commit requires,
+# and compare it to MOOSE_APPTAINER_GENERATOR_TAG -- the image's own
+# actual version, from /environment -- rather than MOOSEDEV_TAG, which is
+# just what we asked for and is "latest" by default.
+RUN . /environment && \
+    cd contrib/moose && \
     required=$(python3 scripts/versioner.py moose-dev HEAD --json | \
       python3 -c "import json, sys; print(json.load(sys.stdin)['apptainer']['tag'])") && \
-    if [ "$required" != "$MOOSEDEV_TAG" ]; then \
-      echo "contrib/moose (HEAD) was tested against moose-dev:$required, not moose-dev:$MOOSEDEV_TAG." >&2; \
+    actual="${MOOSE_APPTAINER_GENERATOR_TAG:-unknown}" && \
+    if [ "$actual" != "$required" ]; then \
+      echo "This is moose-dev:$actual (requested as moose-dev:$MOOSEDEV_TAG), but contrib/moose (HEAD) was tested against moose-dev:$required." >&2; \
       echo "Rebuild with: docker build --build-arg MOOSEDEV_TAG=$required ." >&2; \
       exit 1; \
     fi
+
+RUN git submodule update --init --progress contrib/nekRS && \
+    git submodule update --init --progress contrib/openmc && \
+    git submodule update --init --progress contrib/nuclear_data
 
 FROM idaholab/moose-dev:${MOOSEDEV_TAG}
 

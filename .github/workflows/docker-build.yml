@@ -32,15 +32,13 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       # Ask contrib/moose itself (via its own scripts/versioner.py) which
-      # moose-dev tag this exact pinned commit was tested against, rather
-      # than guessing from whatever moose-dev:latest currently resolves to
-      # on Docker Hub. This is the same comparison MOOSE's own
-      # scripts/premake.py makes at build time, just computed up front so
-      # the Dockerfile's FROM can pull that exact tag directly.
+      # moose-dev tag this pinned commit was tested against, rather than
+      # guessing from moose-dev:latest on Docker Hub. A shallow fetch is
+      # enough -- versioner.py reads file contents at HEAD, not history.
       - name: Resolve required moose-dev tag
         id: moosedev
         run: |
-          git submodule update --init --progress contrib/moose
+          git submodule update --init --depth 1 --progress contrib/moose
           pip install --quiet pyyaml jinja2
           tag=$(python3 contrib/moose/scripts/versioner.py moose-dev HEAD --json | \
             python3 -c "import json, sys; print(json.load(sys.stdin)['apptainer']['tag'])")
