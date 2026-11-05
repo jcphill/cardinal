@@ -17,11 +17,6 @@ permissions:
 
 jobs:
   build-and-push:
-    # Guards against a fork running this unintentionally (e.g. by syncing a
-    # branch this triggers on from upstream) if Actions happen to already be
-    # enabled there -- GHA triggers per-repository on whatever copy of this
-    # file the push lands on, not just in the canonical repo.
-    if: github.repository == 'neams-th-coe/cardinal'
     runs-on: ubuntu-latest
     steps:
       - name: Check out Cardinal
